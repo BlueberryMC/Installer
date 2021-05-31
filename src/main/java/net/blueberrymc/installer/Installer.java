@@ -48,7 +48,7 @@ public class Installer {
         System.out.println(" - Hide server: " + ProfileData.hideServer);
         System.out.println(" - Hide extract: " + ProfileData.hideExtract);
         if (!ProfileData.hideServer && ProfileData.serverFiles.isEmpty()) {
-            System.out.println("Warning: hideExtract is false but extractFiles is empty.");
+            System.out.println("Warning: hideServer is false but serverFiles is empty.");
         }
         if (!ProfileData.hideExtract && ProfileData.extractFiles.isEmpty()) {
             System.out.println("Warning: hideExtract is false but extractFiles is empty.");
