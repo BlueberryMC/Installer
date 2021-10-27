@@ -6,6 +6,8 @@ import java.awt.*;
 import java.io.PrintStream;
 
 public class InstallingPanel extends JPanel {
+    public static final PrintStream STDOUT = System.out;
+    public static final PrintStream STDERR = System.err;
     public final JLabel status = new JLabel("Installing...");
     public final JProgressBar progress = new JProgressBar();
 
@@ -15,7 +17,8 @@ public class InstallingPanel extends JPanel {
         this.add(progress);
         JTextArea textField = new JTextArea(16, 58);
         ((DefaultCaret) textField.getCaret()).setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
-        hookStdout(System.out, textField);
+        System.setOut(wrapPrintStream(System.out, textField));
+        System.setErr(wrapPrintStream(System.err, textField));
         textField.setEditable(false);
         JScrollPane pane = new JScrollPane(textField);
         pane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_ALWAYS);
@@ -23,8 +26,8 @@ public class InstallingPanel extends JPanel {
         this.validate();
     }
 
-    public static void hookStdout(PrintStream out, JTextArea textField) {
-        System.setOut(new PrintStream(out, true) {
+    public static PrintStream wrapPrintStream(PrintStream out, JTextArea textField) {
+        return new PrintStream(out, true) {
             @Override
             public void print(int i) {
                 textField.append(i + "\n");
@@ -80,6 +83,6 @@ public class InstallingPanel extends JPanel {
                 textField.append(obj + "\n");
                 super.print(obj);
             }
-        });
+        };
     }
 }

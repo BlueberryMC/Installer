@@ -12,8 +12,11 @@ import java.io.InputStream;
 import java.nio.channels.Channels;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 public class Installer {
+    public static final boolean headless =
+            GraphicsEnvironment.isHeadless() || Boolean.getBoolean("net.blueberrymc.installer.nogui");
     public static final boolean failed;
 
     static {
@@ -23,12 +26,12 @@ public class Installer {
             fail = false;
         } catch (IOException e) {
             System.out.println("Failed to read profile data");
-            e.printStackTrace(System.out);
-            if (!GraphicsEnvironment.isHeadless()) JOptionPane.showMessageDialog(null, "Failed to read profile data", "Error", JOptionPane.ERROR_MESSAGE);
+            e.printStackTrace();
+            if (!headless) JOptionPane.showMessageDialog(null, "Failed to read profile data", "Error", JOptionPane.ERROR_MESSAGE);
         }
         String path = Installer.class.getProtectionDomain().getCodeSource().getLocation().getPath();
         if (path.contains("!/")) {
-            if (!GraphicsEnvironment.isHeadless()) JOptionPane.showMessageDialog(null, "Do not run this jar in a folder ending with !", "Error", JOptionPane.ERROR_MESSAGE);
+            if (headless) JOptionPane.showMessageDialog(null, "Do not run this jar in a folder ending with !", "Error", JOptionPane.ERROR_MESSAGE);
             System.out.println("Do not run this jar in a folder ending with !");
             System.out.println(path);
             fail = true;
@@ -62,10 +65,10 @@ public class Installer {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | UnsupportedLookAndFeelException e) {
             System.out.println("L&F Initialization failed, using default theme.");
-            e.printStackTrace(System.out);
+            e.printStackTrace();
         }
         JFrame frame = new JFrame();
-        if (!GraphicsEnvironment.isHeadless()) frame.setVisible(true);
+        if (!headless) frame.setVisible(true);
         frame.setSize(width, height);
         frame.setLocationRelativeTo(null);
         frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
@@ -128,12 +131,29 @@ public class Installer {
                     System.out.println("Extracted: " + s + " -> " + filename);
                 } catch (IOException e) {
                     System.out.println("Error: Could not extract " + s + " -> " + filename);
-                    e.printStackTrace(System.out);
+                    e.printStackTrace();
                     complete(true);
                     return;
                 }
             }
-            complete(false);
+            new Thread(() -> {
+                INSTALLING_PANEL.status.setText("Patching");
+                try {
+                    Process process = Runtime.getRuntime().exec("java -Dblueberry.nogui=true -Dblueberry.patchOnly=true -jar " + (new File(version, name + ".jar").getAbsolutePath()), null, InstallOptions.installDir);
+                    new RedirectingInputStream(process.getInputStream()).start();
+                    new RedirectingInputStream(process.getErrorStream()).start();
+                    process.waitFor(10, TimeUnit.MINUTES);
+                } catch (IOException | InterruptedException e) {
+                    System.out.println("Warning: Failed to run patcher");
+                    e.printStackTrace();
+                } catch (Throwable throwable) {
+                    System.gc();
+                    throwable.printStackTrace();
+                    complete(true);
+                    return;
+                }
+                complete(false);
+            }).start();
             return;
         }
         if (InstallOptions.installType == InstallType.EXTRACT || InstallOptions.installType == InstallType.INSTALL_SERVER) {
@@ -163,10 +183,11 @@ public class Installer {
                     System.out.println("Extracted: " + s);
                 } catch (IOException e) {
                     System.out.println("Error: Could not extract " + s);
-                    e.printStackTrace(System.out);
+                    e.printStackTrace();
                     hasError = true;
                 }
             }
+            // TODO: Download libraries when installing server
             complete(hasError);
             return;
         }
@@ -180,14 +201,14 @@ public class Installer {
         INSTALLING_PANEL.progress.setValue(INSTALLING_PANEL.progress.getMaximum());
         if (error) {
             System.out.println("An error occurred while installing");
-            if (!GraphicsEnvironment.isHeadless()) {
+            if (!headless) {
                 JOptionPane.showMessageDialog(null, "An error has occurred and was not fully able to complete the installation. Click OK to close the window, and you can see the logs.", "Error", JOptionPane.ERROR_MESSAGE);
             }
         } else {
             System.out.println("Done!");
-            if (!GraphicsEnvironment.isHeadless()) {
-                JOptionPane.showMessageDialog(null, "Install completed successfully. Click OK to close the installer. If you installed the client, please re-launch the your launcher again if it's already open.", "Completed", JOptionPane.INFORMATION_MESSAGE);
-                System.exit(0);
+            if (!headless) {
+                int i = JOptionPane.showConfirmDialog(null, "Install completed successfully.\nIf you installed the client, please re-launch the your launcher again if it's already open.\nClick Yes to close the installer, Click No to see logs.", "Completed", JOptionPane.YES_NO_OPTION);
+                if (i == 0) System.exit(0);
             }
         }
     }
