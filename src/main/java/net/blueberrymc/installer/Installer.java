@@ -184,6 +184,7 @@ public class Installer {
             }
         }
         new Thread(() -> {
+            System.out.println("Patching the jar");
             INSTALLING_PANEL.status.setText("Patching");
             try {
                 File clientJar = new File(version, name + ".jar");
@@ -198,7 +199,9 @@ public class Installer {
                                 path.toFile().isFile() && path.getFileName().startsWith("patched_") && path.getFileName().endsWith(".jar")
                 ).findFirst().map(Path::toFile).orElse(null);
                 if (patchedJar != null) {
+                    System.out.println("Deleting " + clientJar.getAbsolutePath());
                     Files.deleteIfExists(clientJar.toPath());
+                    System.out.println("Moving " + patchedJar.getAbsolutePath() + " -> " + clientJar.getAbsolutePath());
                     Files.move(patchedJar.toPath(), clientJar.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 }
             } catch (IOException | InterruptedException e) {
