@@ -10,6 +10,10 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.channels.Channels;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -86,74 +90,7 @@ public class Installer {
         System.out.println("Install options:");
         System.out.println(" - Type: " + InstallOptions.installType.name());
         if (InstallOptions.installType == InstallType.INSTALL_CLIENT) {
-            File versions = new File(InstallOptions.installDir, "versions");
-            if (!versions.exists() || !versions.isDirectory()) {
-                System.out.println("Error: " + versions.getAbsolutePath() + " does not exist or not a directory.");
-                complete(true);
-                return;
-            }
-            String name = ProfileData.name;
-            File version = new File(versions, name);
-            if (version.exists() && !version.isDirectory()) {
-                System.out.println("Error: " + version.getAbsolutePath() + " is not a directory.");
-                complete(true);
-                return;
-            }
-            if (version.exists()) {
-                System.out.println("Found existing directory, we're re-using it: " + version.getAbsolutePath());
-            } else {
-                System.out.println("Creating directory: " + version.getAbsolutePath());
-                if (!version.mkdir()) {
-                    System.out.println("Error: Failed to create directory: " + version.getAbsolutePath());
-                    complete(true);
-                    return;
-                }
-            }
-            INSTALLING_PANEL.progress.setMaximum(2);
-            for (String s : Arrays.asList("client.jar", "client.json")) {
-                INSTALLING_PANEL.status.setText("Extracting: " + s);
-                INSTALLING_PANEL.progress.setValue(INSTALLING_PANEL.progress.getValue() + 1);
-                String filename;
-                if (s.equals("client.jar")) {
-                    filename = name + ".jar";
-                } else {
-                    filename = name + ".json";
-                }
-                System.out.println("Extracting: " + s + " -> " + filename);
-                try (InputStream in = Installer.class.getClassLoader().getResourceAsStream(s)) {
-                    if (in == null) {
-                        System.out.println("Error: Could not find: " + s);
-                        complete(true);
-                        return;
-                    }
-                    FileOutputStream out = new FileOutputStream(new File(version, filename));
-                    out.getChannel().transferFrom(Channels.newChannel(in), 0, Long.MAX_VALUE);
-                    System.out.println("Extracted: " + s + " -> " + filename);
-                } catch (IOException e) {
-                    System.out.println("Error: Could not extract " + s + " -> " + filename);
-                    e.printStackTrace();
-                    complete(true);
-                    return;
-                }
-            }
-            new Thread(() -> {
-                INSTALLING_PANEL.status.setText("Patching");
-                try {
-                    Process process = Runtime.getRuntime().exec("java -Dblueberry.nogui=true -Dblueberry.patchOnly=true -jar " + (new File(version, name + ".jar").getAbsolutePath()), null, InstallOptions.installDir);
-                    new RedirectingInputStream(process.getInputStream()).start();
-                    new RedirectingInputStream(process.getErrorStream()).start();
-                    process.waitFor(10, TimeUnit.MINUTES);
-                } catch (IOException | InterruptedException e) {
-                    System.out.println("Warning: Failed to run patcher");
-                    e.printStackTrace();
-                } catch (Throwable throwable) {
-                    System.gc();
-                    throwable.printStackTrace();
-                    complete(true);
-                    return;
-                }
-                complete(false);
-            }).start();
+            installClient();
             return;
         }
         if (InstallOptions.installType == InstallType.EXTRACT || InstallOptions.installType == InstallType.INSTALL_SERVER) {
@@ -193,6 +130,88 @@ public class Installer {
         }
         System.out.println("Unknown action: " + InstallOptions.installType.name());
         complete(true);
+    }
+
+    public static void installClient() {
+        File versions = new File(InstallOptions.installDir, "versions");
+        if (!versions.exists() || !versions.isDirectory()) {
+            System.out.println("Error: " + versions.getAbsolutePath() + " does not exist or not a directory.");
+            complete(true);
+            return;
+        }
+        String name = ProfileData.name;
+        File version = new File(versions, name);
+        if (version.exists() && !version.isDirectory()) {
+            System.out.println("Error: " + version.getAbsolutePath() + " is not a directory.");
+            complete(true);
+            return;
+        }
+        if (version.exists()) {
+            System.out.println("Found existing directory, we're re-using it: " + version.getAbsolutePath());
+        } else {
+            System.out.println("Creating directory: " + version.getAbsolutePath());
+            if (!version.mkdir()) {
+                System.out.println("Error: Failed to create directory: " + version.getAbsolutePath());
+                complete(true);
+                return;
+            }
+        }
+        INSTALLING_PANEL.progress.setMaximum(2);
+        for (String s : Arrays.asList("client.jar", "client.json")) {
+            INSTALLING_PANEL.status.setText("Extracting: " + s);
+            INSTALLING_PANEL.progress.setValue(INSTALLING_PANEL.progress.getValue() + 1);
+            String filename;
+            if (s.equals("client.jar")) {
+                filename = name + ".jar";
+            } else {
+                filename = name + ".json";
+            }
+            System.out.println("Extracting: " + s + " -> " + filename);
+            try (InputStream in = Installer.class.getClassLoader().getResourceAsStream(s)) {
+                if (in == null) {
+                    System.out.println("Error: Could not find: " + s);
+                    complete(true);
+                    return;
+                }
+                FileOutputStream out = new FileOutputStream(new File(version, filename));
+                out.getChannel().transferFrom(Channels.newChannel(in), 0, Long.MAX_VALUE);
+                System.out.println("Extracted: " + s + " -> " + filename);
+            } catch (IOException e) {
+                System.out.println("Error: Could not extract " + s + " -> " + filename);
+                e.printStackTrace();
+                complete(true);
+                return;
+            }
+        }
+        new Thread(() -> {
+            INSTALLING_PANEL.status.setText("Patching");
+            try {
+                File clientJar = new File(version, name + ".jar");
+                Process process = Runtime.getRuntime().exec("java -Dblueberry.nogui=true -Dblueberry.patchOnly=true -jar " + (clientJar.getAbsolutePath()), null, version);
+                new RedirectingInputStream(process.getInputStream()).start();
+                new RedirectingInputStream(process.getErrorStream()).start();
+                process.waitFor(10, TimeUnit.MINUTES);
+                File patchedJar = Files.find(
+                        Paths.get("."),
+                        0,
+                        (path, basicFileAttributes) ->
+                                path.toFile().isFile() && path.getFileName().startsWith("patched_") && path.getFileName().endsWith(".jar")
+                ).findFirst().map(Path::toFile).orElse(null);
+                if (patchedJar != null) {
+                    Files.deleteIfExists(clientJar.toPath());
+                    Files.move(patchedJar.toPath(), clientJar.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                }
+            } catch (IOException | InterruptedException e) {
+                System.out.println("Warning: Failed to run patcher");
+                e.printStackTrace();
+            } catch (Throwable throwable) {
+                System.gc();
+                throwable.printStackTrace();
+                complete(true);
+                return;
+            }
+            complete(false);
+        }).start();
     }
 
     public static void complete(boolean error) {
