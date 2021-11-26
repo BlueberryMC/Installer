@@ -176,6 +176,7 @@ public class Installer {
                 FileOutputStream out = new FileOutputStream(new File(version, filename));
                 out.getChannel().transferFrom(Channels.newChannel(in), 0, Long.MAX_VALUE);
                 System.out.println("Extracted: " + s + " -> " + filename);
+                out.close();
             } catch (IOException e) {
                 System.out.println("Error: Could not extract " + s + " -> " + filename);
                 e.printStackTrace();
@@ -192,6 +193,7 @@ public class Installer {
                 new RedirectingInputStream(process.getInputStream()).start();
                 new RedirectingInputStream(process.getErrorStream()).start();
                 process.waitFor(10, TimeUnit.MINUTES);
+                process.destroyForcibly().waitFor(1, TimeUnit.MINUTES);
                 File patchedJar = Files.find(
                         new File(version, "cache").toPath(),
                         1,
