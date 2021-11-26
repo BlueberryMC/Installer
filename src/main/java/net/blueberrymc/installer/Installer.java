@@ -192,7 +192,7 @@ public class Installer {
                 new RedirectingInputStream(process.getErrorStream()).start();
                 process.waitFor(10, TimeUnit.MINUTES);
                 File patchedJar = Files.find(
-                        Paths.get("./cache"),
+                        new File(version, "cache").toPath(),
                         1,
                         (path, basicFileAttributes) ->
                                 path.toFile().isFile() && path.getFileName().startsWith("patched_") && path.getFileName().endsWith(".jar")
