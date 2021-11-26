@@ -196,7 +196,7 @@ public class Installer {
                         new File(version, "cache").toPath(),
                         1,
                         (path, basicFileAttributes) ->
-                                path.toFile().isFile() && path.getFileName().startsWith("patched_") && path.getFileName().endsWith(".jar")
+                                path.toFile().isFile() && path.toFile().getName().startsWith("patched_") && path.toFile().getName().endsWith(".jar")
                 ).findFirst().map(Path::toFile).orElse(null);
                 if (patchedJar != null) {
                     System.out.println("Deleting " + clientJar.getAbsolutePath());
