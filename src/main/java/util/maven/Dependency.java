@@ -95,7 +95,7 @@ public class Dependency {
         if (type != null) {
             notation += type + ":";
         }
-        if (classifier != null) {
+        if (classifier != null && !classifier.isEmpty()) {
             if (classifier.startsWith("-")) {
                 notation += classifier.substring(1) + ":";
             } else {

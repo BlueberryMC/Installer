@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -155,10 +156,15 @@ public class Installer {
                     hasError = true;
                 }
             }
+            if (hasError) {
+                complete(true);
+                return;
+            }
             if (InstallOptions.installType == InstallType.INSTALL_SERVER) {
                 downloadLibraries();
+            } else {
+                complete(false);
             }
-            complete(hasError);
             return;
         }
         System.out.println("Unknown action: " + InstallOptions.installType.name());
@@ -267,7 +273,7 @@ public class Installer {
         for (String dependency : ProfileData.serverLibraries) {
             maven.addDependency(Dependency.resolve(dependency));
         }
-        MavenRepositoryFetcher fetcher = maven.newFetcher(InstallOptions.installDir).withMessageReporter((message, error) -> {
+        MavenRepositoryFetcher fetcher = maven.newFetcher(new File(InstallOptions.installDir, "libraries")).withMessageReporter((message, error) -> {
             if (error == null) {
                 System.out.println(message);
             } else {
@@ -293,13 +299,32 @@ public class Installer {
         INSTALLING_PANEL.status.setText("Downloading libraries");
         INSTALLING_PANEL.progress.setMaximum(toDownload.size());
         INSTALLING_PANEL.progress.setValue(0);
-        List<Dependency> toDownloadList = new ArrayList<>(toDownload);
-        for (int i = 0; i < toDownloadList.size(); i++) {
-            Dependency dependency = toDownloadList.get(i);
-            System.out.println("[" + (i + 1) + "/" + toDownloadList.size() + "] Downloading " + dependency.toNotation());
-            INSTALLING_PANEL.progress.setValue(i + 1);
-            fetcher.downloadFile(dependency);
-        }
+        List<Dependency> toDownloadList = Collections.synchronizedList(new ArrayList<>(toDownload));
+        new SwingWorker<>() {
+            @Override
+            protected Object doInBackground() {
+                for (int i = 0; i < toDownloadList.size(); i++) {
+                    Dependency dependency = toDownloadList.get(i);
+                    System.out.println("[" + (i + 1) + "/" + toDownloadList.size() + "] Downloading " + dependency.toNotation());
+                    publish(i);
+                    fetcher.downloadFile(dependency);
+                }
+                return toDownloadList.size();
+            }
+
+            @Override
+            protected void process(List<Object> chunks) {
+                for (Object o : chunks) {
+                    int i = (int) o;
+                    INSTALLING_PANEL.progress.setValue(i + 1);
+                }
+            }
+
+            @Override
+            protected void done() {
+                complete(false);
+            }
+        }.execute();
     }
 
     public static void complete(boolean error) {
