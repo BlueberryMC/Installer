@@ -285,24 +285,21 @@ public class Installer {
         });
         INSTALLING_PANEL.status.setText("Collecting libraries");
         INSTALLING_PANEL.progress.setValue(0);
-        Set<Dependency> toDownload = new HashSet<>();
-        for (Dependency dependency : maven.getDependencies()) {
-            toDownload.addAll(fetcher.collectAllDependencies(dependency));
-        }
-        for (Map.Entry<String, String> entry : maven.getExclude()) {
-            toDownload.removeIf(dep -> dep.getGroupId().equals(entry.getKey()) && dep.getArtifactId().equals(entry.getValue()));
-        }
-        for (Dependency dependency : maven.getDependencies()) {
-            toDownload.removeIf(dep -> dep.getGroupId().equals(dependency.getGroupId()) && dep.getArtifactId().equals(dependency.getArtifactId()));
-        }
-        toDownload.addAll(maven.getDependencies());
-        INSTALLING_PANEL.status.setText("Downloading libraries");
-        INSTALLING_PANEL.progress.setMaximum(toDownload.size());
-        INSTALLING_PANEL.progress.setValue(0);
-        List<Dependency> toDownloadList = Collections.synchronizedList(new ArrayList<>(toDownload));
         new SwingWorker<>() {
             @Override
             protected Object doInBackground() {
+                Set<Dependency> toDownload = new HashSet<>();
+                for (Dependency dependency : maven.getDependencies()) {
+                    toDownload.addAll(fetcher.collectAllDependencies(dependency));
+                }
+                for (Dependency dependency : maven.getDependencies()) {
+                    toDownload.removeIf(dep -> dep.getGroupId().equals(dependency.getGroupId()) && dep.getArtifactId().equals(dependency.getArtifactId()));
+                }
+                toDownload.addAll(maven.getDependencies());
+                INSTALLING_PANEL.status.setText("Downloading libraries");
+                INSTALLING_PANEL.progress.setMaximum(toDownload.size());
+                INSTALLING_PANEL.progress.setValue(0);
+                List<Dependency> toDownloadList = Collections.synchronizedList(new ArrayList<>(toDownload));
                 for (int i = 0; i < toDownloadList.size(); i++) {
                     Dependency dependency = toDownloadList.get(i);
                     System.out.println("[" + (i + 1) + "/" + toDownloadList.size() + "] Downloading " + dependency.toNotation());
