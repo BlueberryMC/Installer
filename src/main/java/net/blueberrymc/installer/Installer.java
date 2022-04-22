@@ -70,7 +70,7 @@ public class Installer {
         }
         frame.add(MAIN_PANEL);
         frame.validate();
-        if (!headless) {
+        if (headless) {
             if (args.length == 0 || (!args[0].equals("install-client") && !args[0].equals("install-server") && !args[0].equals("extract"))) {
                 System.out.println("Usage: java -jar blueberry-installer.jar install-client ... Install the client in .minecraft directory");
                 System.out.println("       java -jar blueberry-installer.jar install-server ... Install the server in current directory");
