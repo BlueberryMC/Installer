@@ -2,6 +2,10 @@ package net.blueberrymc.installer;
 
 import net.blueberrymc.installer.gui.InstallingPanel;
 import net.blueberrymc.installer.gui.MainPanel;
+import util.maven.Dependency;
+import util.maven.MavenRepository;
+import util.maven.MavenRepositoryFetcher;
+import util.maven.Repository;
 
 import javax.swing.*;
 import java.awt.*;
@@ -12,11 +16,15 @@ import java.io.InputStream;
 import java.nio.channels.Channels;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Stream;
 
 public class Installer {
     public static final boolean headless =
@@ -62,6 +70,28 @@ public class Installer {
         }
         frame.add(MAIN_PANEL);
         frame.validate();
+        if (!headless) {
+            if (args.length == 0 || (!args[0].equals("install-client") && !args[0].equals("install-server") && !args[0].equals("extract"))) {
+                System.out.println("Usage: java -jar blueberry-installer.jar install-client ... Install the client in .minecraft directory");
+                System.out.println("       java -jar blueberry-installer.jar install-server ... Install the server in current directory");
+                System.out.println("       java -jar blueberry-installer.jar extract ... Extract files in the installer in current directory");
+                System.exit(1);
+            }
+            if (args[0].equals("install-client")) {
+                InstallOptions.installType = InstallType.INSTALL_CLIENT;
+                InstallOptions.installDir = InstallOptions.getMinecraftDir();
+                if (!InstallOptions.installDir.exists()) {
+                    throw new RuntimeException("minecraft data directory does not exist");
+                }
+            }
+            if (args[0].equals("install-server")) {
+                InstallOptions.installType = InstallType.INSTALL_SERVER;
+            }
+            if (args[0].equals("extract")) {
+                InstallOptions.installType = InstallType.EXTRACT;
+            }
+            doInstall();
+        }
     }
 
     public static JFrame initFrame(int width, int height) {
@@ -115,8 +145,9 @@ public class Installer {
                         hasError = true;
                         continue;
                     }
-                    FileOutputStream out = new FileOutputStream(new File(InstallOptions.installDir, s));
-                    out.getChannel().transferFrom(Channels.newChannel(in), 0, Long.MAX_VALUE);
+                    try (FileOutputStream out = new FileOutputStream(new File(InstallOptions.installDir, s))) {
+                        out.getChannel().transferFrom(Channels.newChannel(in), 0, Long.MAX_VALUE);
+                    }
                     System.out.println("Extracted: " + s);
                 } catch (IOException e) {
                     System.out.println("Error: Could not extract " + s);
@@ -124,7 +155,9 @@ public class Installer {
                     hasError = true;
                 }
             }
-            // TODO: Download libraries when installing server
+            if (InstallOptions.installType == InstallType.INSTALL_SERVER) {
+                downloadLibraries();
+            }
             complete(hasError);
             return;
         }
@@ -194,12 +227,13 @@ public class Installer {
                 new RedirectingInputStream(process.getErrorStream()).start();
                 process.waitFor(10, TimeUnit.MINUTES);
                 process.destroyForcibly().waitFor(1, TimeUnit.MINUTES);
-                File patchedJar = Files.find(
+                File patchedJar;
+                try (Stream<Path> stream = Files.find(
                         new File(version, "cache").toPath(),
                         1,
-                        (path, basicFileAttributes) ->
-                                path.toFile().isFile() && path.toFile().getName().startsWith("patched_") && path.toFile().getName().endsWith(".jar")
-                ).findFirst().map(Path::toFile).orElse(null);
+                        (path, basicFileAttributes) -> path.toFile().isFile() && path.toFile().getName().startsWith("patched_") && path.toFile().getName().endsWith(".jar"))) {
+                    patchedJar = stream.findFirst().map(Path::toFile).orElse(null);
+                }
                 if (patchedJar != null) {
                     System.out.println("Deleting " + clientJar.getAbsolutePath());
                     Files.deleteIfExists(clientJar.toPath());
@@ -217,6 +251,55 @@ public class Installer {
             }
             complete(false);
         }).start();
+    }
+
+    public static void downloadLibraries() {
+        System.out.println(ProfileData.serverLibraries.size() + " libraries to download");
+        if (ProfileData.serverLibraries.isEmpty()) {
+            return;
+        }
+        MavenRepository maven = new MavenRepository();
+        maven.addRepository(Repository.mavenLocal());
+        maven.addRepository(Repository.mavenCentral());
+        for (int i = 0; i < ProfileData.serverRepositories.size(); i++) {
+            maven.addRepository(Repository.url("maven-repo-" + i, ProfileData.serverRepositories.get(i)));
+        }
+        for (String dependency : ProfileData.serverLibraries) {
+            maven.addDependency(Dependency.resolve(dependency));
+        }
+        MavenRepositoryFetcher fetcher = maven.newFetcher(InstallOptions.installDir).withMessageReporter((message, error) -> {
+            if (error == null) {
+                System.out.println(message);
+            } else {
+                if (message != null) {
+                    System.err.println(message);
+                }
+                error.printStackTrace();
+            }
+        });
+        INSTALLING_PANEL.status.setText("Collecting libraries");
+        INSTALLING_PANEL.progress.setValue(0);
+        Set<Dependency> toDownload = new HashSet<>();
+        for (Dependency dependency : maven.getDependencies()) {
+            toDownload.addAll(fetcher.collectAllDependencies(dependency));
+        }
+        for (Map.Entry<String, String> entry : maven.getExclude()) {
+            toDownload.removeIf(dep -> dep.getGroupId().equals(entry.getKey()) && dep.getArtifactId().equals(entry.getValue()));
+        }
+        for (Dependency dependency : maven.getDependencies()) {
+            toDownload.removeIf(dep -> dep.getGroupId().equals(dependency.getGroupId()) && dep.getArtifactId().equals(dependency.getArtifactId()));
+        }
+        toDownload.addAll(maven.getDependencies());
+        INSTALLING_PANEL.status.setText("Downloading libraries");
+        INSTALLING_PANEL.progress.setMaximum(toDownload.size());
+        INSTALLING_PANEL.progress.setValue(0);
+        List<Dependency> toDownloadList = new ArrayList<>(toDownload);
+        for (int i = 0; i < toDownloadList.size(); i++) {
+            Dependency dependency = toDownloadList.get(i);
+            System.out.println("[" + (i + 1) + "/" + toDownloadList.size() + "] Downloading " + dependency.toNotation());
+            INSTALLING_PANEL.progress.setValue(i + 1);
+            fetcher.downloadFile(dependency);
+        }
     }
 
     public static void complete(boolean error) {

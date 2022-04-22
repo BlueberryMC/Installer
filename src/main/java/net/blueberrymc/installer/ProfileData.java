@@ -1,5 +1,7 @@
 package net.blueberrymc.installer;
 
+import util.base.Strings;
+
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -15,6 +17,8 @@ public class ProfileData {
     public static boolean hideClient = false;
     public static boolean hideServer = false;
     public static boolean hideExtract = false;
+    public static List<String> serverRepositories = new ArrayList<>();
+    public static List<String> serverLibraries = new ArrayList<>();
     public static List<String> serverFiles = new ArrayList<>();
     public static List<String> extractFiles = new ArrayList<>();
 
@@ -27,6 +31,8 @@ public class ProfileData {
             hideClient = Boolean.parseBoolean(properties.getProperty("hideClient"));
             hideServer = Boolean.parseBoolean(properties.getProperty("hideServer"));
             hideExtract = Boolean.parseBoolean(properties.getProperty("hideExtract"));
+            readList(serverRepositories, properties.getProperty("serverRepositories"));
+            readList(serverLibraries, properties.getProperty("serverLibraries"));
             serverFiles.clear();
             for (String s : properties.getProperty("serverFiles", "").split(",")) {
                 if (s.isEmpty()) continue;
@@ -37,6 +43,14 @@ public class ProfileData {
                 if (s.isEmpty()) continue;
                 extractFiles.add(s);
             }
+        }
+    }
+
+    private static void readList(List<String> list, String path) throws IOException {
+        list.clear();
+        InputStream in = ProfileData.class.getResourceAsStream(path);
+        if (in != null) {
+            list.addAll(Strings.readLines(in));
         }
     }
 }
