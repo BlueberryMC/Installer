@@ -24,6 +24,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 public class Installer {
@@ -290,43 +293,51 @@ public class Installer {
         });
         INSTALLING_PANEL.status.setText("Collecting libraries");
         INSTALLING_PANEL.progress.setValue(0);
-        new SwingWorker<>() {
-            @Override
-            protected Object doInBackground() {
-                Set<Dependency> toDownload = new HashSet<>();
-                for (Dependency dependency : maven.getDependencies()) {
-                    toDownload.addAll(fetcher.collectAllDependencies(dependency));
-                }
-                for (Dependency dependency : maven.getDependencies()) {
-                    toDownload.removeIf(dep -> dep.getGroupId().equals(dependency.getGroupId()) && dep.getArtifactId().equals(dependency.getArtifactId()));
-                }
-                toDownload.addAll(maven.getDependencies());
-                INSTALLING_PANEL.status.setText("Downloading libraries");
-                INSTALLING_PANEL.progress.setMaximum(toDownload.size());
-                INSTALLING_PANEL.progress.setValue(0);
-                List<Dependency> toDownloadList = Collections.synchronizedList(new ArrayList<>(toDownload));
-                for (int i = 0; i < toDownloadList.size(); i++) {
-                    Dependency dependency = toDownloadList.get(i);
-                    System.out.println("[" + (i + 1) + "/" + toDownloadList.size() + "] Downloading " + dependency.toNotation());
-                    publish(i);
-                    fetcher.downloadFile(dependency);
-                }
-                return toDownloadList.size();
+        Function<Consumer<Object>, Integer> work = (publish) -> {
+            Set<Dependency> toDownload = new HashSet<>();
+            for (Dependency dependency : maven.getDependencies()) {
+                toDownload.addAll(fetcher.collectAllDependencies(dependency));
             }
+            for (Dependency dependency : maven.getDependencies()) {
+                toDownload.removeIf(dep -> dep.getGroupId().equals(dependency.getGroupId()) && dep.getArtifactId().equals(dependency.getArtifactId()));
+            }
+            toDownload.addAll(maven.getDependencies());
+            INSTALLING_PANEL.status.setText("Downloading libraries");
+            INSTALLING_PANEL.progress.setMaximum(toDownload.size());
+            INSTALLING_PANEL.progress.setValue(0);
+            List<Dependency> toDownloadList = Collections.synchronizedList(new ArrayList<>(toDownload));
+            for (int i = 0; i < toDownloadList.size(); i++) {
+                Dependency dependency = toDownloadList.get(i);
+                System.out.println("[" + (i + 1) + "/" + toDownloadList.size() + "] Downloading " + dependency.toNotation());
+                publish.accept(i);
+                fetcher.downloadFile(dependency);
+            }
+            return toDownloadList.size();
+        };
+        if (headless) {
+            work.apply(o -> {});
+            complete(false);
+        } else {
+            new SwingWorker<>() {
+                @Override
+                protected Object doInBackground() {
+                    return work.apply(this::publish);
+                }
 
-            @Override
-            protected void process(List<Object> chunks) {
-                for (Object o : chunks) {
-                    int i = (int) o;
-                    INSTALLING_PANEL.progress.setValue(i + 1);
+                @Override
+                protected void process(List<Object> chunks) {
+                    for (Object o : chunks) {
+                        int i = (int) o;
+                        INSTALLING_PANEL.progress.setValue(i + 1);
+                    }
                 }
-            }
 
-            @Override
-            protected void done() {
-                complete(false);
-            }
-        }.execute();
+                @Override
+                protected void done() {
+                    complete(false);
+                }
+            }.execute();
+        }
     }
 
     public static void complete(boolean error) {
