@@ -26,7 +26,6 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 public class Installer {
@@ -268,7 +267,7 @@ public class Installer {
     }
 
     public static void downloadLibraries() {
-        System.out.println(ProfileData.serverLibraries.size() + " libraries to download");
+        System.out.println(ProfileData.serverLibraries.size() + " defined libraries to download");
         if (ProfileData.serverLibraries.isEmpty()) {
             return;
         }
@@ -302,6 +301,10 @@ public class Installer {
                 toDownload.removeIf(dep -> dep.getGroupId().equals(dependency.getGroupId()) && dep.getArtifactId().equals(dependency.getArtifactId()));
             }
             toDownload.addAll(maven.getDependencies());
+            for (String s : ProfileData.serverLibrariesExclude) {
+                toDownload.removeIf(dependency -> dependency.toNotation().matches(s));
+            }
+            System.out.println("Attempting to download " + toDownload.size() + " libraries");
             INSTALLING_PANEL.status.setText("Downloading libraries");
             INSTALLING_PANEL.progress.setMaximum(toDownload.size());
             INSTALLING_PANEL.progress.setValue(0);

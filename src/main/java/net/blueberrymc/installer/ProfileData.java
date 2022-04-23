@@ -19,6 +19,7 @@ public class ProfileData {
     public static boolean hideExtract = false;
     public static List<String> serverRepositories = new ArrayList<>();
     public static List<String> serverLibraries = new ArrayList<>();
+    public static List<String> serverLibrariesExclude = new ArrayList<>();
     public static List<String> serverFiles = new ArrayList<>();
     public static List<String> extractFiles = new ArrayList<>();
 
@@ -33,6 +34,7 @@ public class ProfileData {
             hideExtract = Boolean.parseBoolean(properties.getProperty("hideExtract"));
             readList(serverRepositories, properties.getProperty("serverRepositories"));
             readList(serverLibraries, properties.getProperty("serverLibraries"));
+            readList(serverLibrariesExclude, properties.getProperty("serverLibrariesExclude"));
             serverFiles.clear();
             for (String s : properties.getProperty("serverFiles", "").split(",")) {
                 if (s.isEmpty()) continue;
