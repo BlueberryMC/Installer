@@ -50,6 +50,7 @@ public class ProfileData {
 
     private static void readList(List<String> list, String path) throws IOException {
         list.clear();
+        if (path == null) return;
         InputStream in = ProfileData.class.getResourceAsStream(path);
         if (in != null) {
             list.addAll(Strings.readLines(in));
