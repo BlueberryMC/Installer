@@ -68,8 +68,10 @@ public class Installer {
         if (!ProfileData.hideExtract && ProfileData.extractFiles.isEmpty()) {
             System.out.println("Warning: hideExtract is false but extractFiles is empty.");
         }
-        frame.add(MAIN_PANEL);
-        frame.validate();
+        if (frame != null) {
+            frame.add(MAIN_PANEL);
+            frame.validate();
+        }
         if (headless) {
             if (args.length == 0 || (!args[0].equals("install-client") && !args[0].equals("install-server") && !args[0].equals("extract"))) {
                 System.out.println("Usage: java -jar blueberry-installer.jar install-client ... Install the client in .minecraft directory");
@@ -95,6 +97,7 @@ public class Installer {
     }
 
     public static JFrame initFrame(int width, int height) {
+        if (headless) return null;
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (ClassNotFoundException | InstantiationException | IllegalAccessException | UnsupportedLookAndFeelException e) {
@@ -102,7 +105,7 @@ public class Installer {
             e.printStackTrace();
         }
         JFrame frame = new JFrame();
-        if (!headless) frame.setVisible(true);
+        frame.setVisible(true);
         frame.setSize(width, height);
         frame.setLocationRelativeTo(null);
         frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
@@ -112,11 +115,14 @@ public class Installer {
     }
 
     public static void doInstall() {
-        frame.setVisible(false);
-        frame = initFrame(500, 400);
-        frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
-        frame.add(INSTALLING_PANEL);
-        frame.validate();
+        if (frame != null && !headless) {
+            frame.setVisible(false);
+            frame = initFrame(500, 400);
+            assert frame != null;
+            frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+            frame.add(INSTALLING_PANEL);
+            frame.validate();
+        }
         System.out.println("Install options:");
         System.out.println(" - Type: " + InstallOptions.installType.name());
         if (InstallOptions.installType == InstallType.INSTALL_CLIENT) {
