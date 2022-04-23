@@ -342,7 +342,9 @@ public class Installer {
 
     public static void complete(boolean error) {
         INSTALLING_PANEL.status.setText("Completed");
-        frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        if (frame != null) {
+            frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+        }
         INSTALLING_PANEL.progress.setValue(INSTALLING_PANEL.progress.getMaximum());
         if (error) {
             System.out.println("An error occurred while installing");
